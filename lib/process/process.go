@@ -185,8 +185,6 @@ func New(ctx context.Context, cfg processconfig.Config, tcfg telecfg.FileConfig)
 	// enable Enterprise version modules
 	telemodules.SetModules(&enterpriseModules{})
 
-	ctx, cancel := context.WithCancel(ctx)
-
 	err := cfg.CheckAndSetDefaults()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -197,13 +195,6 @@ func New(ctx context.Context, cfg processconfig.Config, tcfg telecfg.FileConfig)
 		return nil, trace.Wrap(err)
 	}
 	logrus.AddHook(hook)
-
-	if cfg.Profile.HTTPEndpoint != "" {
-		err = StartProfiling(ctx, cfg.Profile.HTTPEndpoint, cfg.Profile.OutputDir)
-		if err != nil {
-			logrus.Warningf("Failed to setup profiling: %v.", trace.DebugReport(err))
-		}
-	}
 
 	backend, err := cfg.CreateBackend()
 	if err != nil {
@@ -240,13 +231,23 @@ func New(ctx context.Context, cfg processconfig.Config, tcfg telecfg.FileConfig)
 		return nil, trace.Wrap(err)
 	}
 
+	var numMasters int
+	if inKubernetes() {
+		cluster, err := backend.GetLocalSite(defaults.SystemAccountID)
+		// Ignore not found errors during import
+		if err != nil && !trace.IsNotFound(err) {
+			return nil, trace.Wrap(err)
+		}
+		numMasters = cluster.ClusterState.NumMasters()
+	}
+
 	clusterObjects, err := blobcluster.New(blobcluster.Config{
 		Local:         objects,
 		Backend:       backend,
 		GetPeer:       peerPool.GetPeer,
 		ID:            processID,
 		AdvertiseAddr: fmt.Sprintf("https://%v", peerAddr.Addr),
-		// TODO: set WriteFactor to the number of controller instances
+		WriteFactor:   numMasters, // will be reset to default if 0
 	})
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -260,6 +261,20 @@ func New(ctx context.Context, cfg processconfig.Config, tcfg telecfg.FileConfig)
 	})
 	if err != nil {
 		return nil, trace.Wrap(err)
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer func() {
+		if err != nil {
+			cancel()
+		}
+	}()
+
+	if cfg.Profile.HTTPEndpoint != "" {
+		err = StartProfiling(ctx, cfg.Profile.HTTPEndpoint, cfg.Profile.OutputDir)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to setup profiling.")
+		}
 	}
 
 	process := &Process{
@@ -1041,7 +1056,7 @@ func (p *Process) initCertificateAuthority() error {
 	return nil
 }
 
-func (p *Process) inKubernetes() bool {
+func inKubernetes() bool {
 	return os.Getenv(constants.EnvPodIP) != ""
 }
 
@@ -1230,7 +1245,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 	}
 
 	var client *kubernetes.Clientset
-	if p.inKubernetes() {
+	if inKubernetes() {
 		client, err = tryGetPrivilegedKubeClient()
 		if err != nil {
 			return trace.Wrap(err)
@@ -1271,7 +1286,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 	}
 	p.applications = applications
 
-	if p.inKubernetes() {
+	if inKubernetes() {
 		p.handlers.Registry, err = docker.NewRegistry(docker.Config{
 			Context: ctx,
 			Users:   p.identity,
@@ -1301,7 +1316,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 	}
 
 	var logs opsservice.LogForwardersControl
-	if p.inKubernetes() {
+	if inKubernetes() {
 		logs = opsservice.NewLogForwardersControl(client)
 	}
 
@@ -1386,7 +1401,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 
 	// a few services that are running only when gravity is started in
 	// local site mode
-	if p.inKubernetes() {
+	if inKubernetes() {
 		if p.leader == nil {
 			return trace.BadParameter(
 				"cluster requires backend with election capability")
@@ -1436,7 +1451,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 		Tunnel: reverseTunnel,
 	}
 
-	if p.inKubernetes() {
+	if inKubernetes() {
 		serverVersion, err := client.ServerVersion()
 		if err != nil {
 			return trace.Wrap(err, "failed to query kubernetes server version")
@@ -1726,7 +1741,7 @@ func (p *Process) startListening(handler http.Handler, addr string) (net.Listene
 // retrieved from the cluster-tls secret. Otherwise (or if that fails) it
 // falls back to self-signed certificate and key.
 func (p *Process) getTLSConfig() (*tls.Config, error) {
-	if p.inKubernetes() {
+	if inKubernetes() {
 		config, err := p.tryGetTLSConfig()
 		if err == nil {
 			return config, nil
