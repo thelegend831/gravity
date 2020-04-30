@@ -35,6 +35,7 @@ import (
 	"github.com/gravitational/gravity/lib/schema"
 	"github.com/gravitational/gravity/lib/state"
 	"github.com/gravitational/gravity/lib/storage"
+	"github.com/gravitational/gravity/lib/update"
 	"github.com/gravitational/gravity/lib/users"
 	"github.com/gravitational/gravity/lib/utils"
 
@@ -74,7 +75,8 @@ type updatePhaseInit struct {
 	// existingDNS is the existing DNS configuration
 	existingDNS storage.DNSConfig
 	// init specifies the optional server-specific initialization
-	init *updatePhaseInitServer
+	init          *updatePhaseInitServer
+	existingPeers []string
 }
 
 // NewUpdatePhaseInitLeader creates a new update init phase executor
@@ -142,6 +144,7 @@ func NewUpdatePhaseInitLeader(
 		existingDocker: existingDocker,
 		existingDNS:    p.Plan.DNSConfig,
 		init:           init,
+		existingPeers:  clusterPeers(p.Phase.Data.Update.Servers),
 	}, nil
 }
 
@@ -178,6 +181,9 @@ func (p *updatePhaseInit) Execute(ctx context.Context) error {
 	}
 	if err := p.updateDockerConfig(); err != nil {
 		return trace.Wrap(err, "failed to update Docker configuration")
+	}
+	if err := p.removeInvalidObjectPeers(); err != nil {
+		return trace.Wrap(err, "failed to clean up object peers")
 	}
 	if p.init != nil {
 		if err := p.init.Execute(ctx); err != nil {
@@ -449,6 +455,37 @@ func (p *updatePhaseInit) removeConfiguredPackages() error {
 		})
 }
 
+// removeInvalidObjectPeers removes object peers that are no longer
+// in the cluster
+func (p *updatePhaseInit) removeInvalidObjectPeers() error {
+	peers, err := p.Backend.GetPeers()
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	var errors []error
+	for _, peer := range peers {
+		if !p.invalidPeers(peer.ID) {
+			continue
+		}
+		p.WithField("peer", peer).Info("Remove invalid peer.")
+		if err := p.Backend.DeletePeer(peer.ID); err != nil {
+			// Continue with other peers but collect errors to report
+			errors = append(errors, err)
+		}
+	}
+	return trace.NewAggregate(errors...)
+}
+
+// invalidPeers returns true if all given peers are invalid (no longer in the cluster)
+func (p *updatePhaseInit) invalidPeers(peers ...string) (invalid bool) {
+	for _, peer := range peers {
+		if utils.StringInSlice(p.existingPeers, peer) {
+			return false
+		}
+	}
+	return true
+}
+
 func updateRuntimeConfigLabels(packages pack.PackageService, installedRuntime loc.Locator) ([]pack.LabelUpdate, error) {
 	runtimeConfig, err := pack.FindInstalledConfigPackage(packages, installedRuntime)
 	if err != nil && !trace.IsNotFound(err) {
@@ -543,4 +580,13 @@ func removeLegacyUpdateDirectory(log log.FieldLogger) error {
 	}
 	log.WithField("dir", updateDir).Debug("Remove legacy update directory.")
 	return trace.ConvertSystemError(os.RemoveAll(updateDir))
+}
+
+func clusterPeers(servers []storage.UpdateServer) (peers []string) {
+	masters, _ := update.SplitServers(servers)
+	peers = make([]string, 0, len(masters))
+	for _, server := range masters {
+		peers = append(peers, server.ObjectPeerID())
+	}
+	return peers
 }
