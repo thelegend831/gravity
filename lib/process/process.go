@@ -201,13 +201,6 @@ func New(ctx context.Context, cfg processconfig.Config, tcfg telecfg.FileConfig)
 	}
 	logrus.AddHook(hook)
 
-	if cfg.Profile.HTTPEndpoint != "" {
-		err = StartProfiling(context.TODO(), cfg.Profile.HTTPEndpoint, cfg.Profile.OutputDir)
-		if err != nil {
-			logrus.WithError(err).Warn("Failed to setup profiling.")
-		}
-	}
-
 	backend, err := cfg.CreateBackend()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -249,11 +242,14 @@ func New(ctx context.Context, cfg processconfig.Config, tcfg telecfg.FileConfig)
 		GetPeer:       peerPool.GetPeer,
 		ID:            processID,
 		AdvertiseAddr: fmt.Sprintf("https://%v", peerAddr.Addr),
-		// TODO: set WriteFactor to the number of controller instances
+		// default WriteFactor to defaults.WriteFactor to avoid blocking
+		// on possibly inaccessible nodes
+		WriteFactor: defaults.WriteFactor,
 	})
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
+	clusterObjects.Start()
 
 	packages, err := localpack.New(localpack.Config{
 		Backend:     backend,
@@ -271,6 +267,14 @@ func New(ctx context.Context, cfg processconfig.Config, tcfg telecfg.FileConfig)
 			cancel()
 		}
 	}()
+
+	if cfg.Profile.HTTPEndpoint != "" {
+		err = StartProfiling(ctx, cfg.Profile.HTTPEndpoint, cfg.Profile.OutputDir)
+		if err != nil {
+			logrus.WithError(err).Warn("Failed to setup profiling.")
+		}
+	}
+
 	process := &Process{
 		context:        ctx,
 		cancel:         cancel,
@@ -952,9 +956,9 @@ func (p *Process) resumeLastOperationLoop(ctx context.Context) {
 				continue
 			}
 			if trace.IsNotFound(err) {
-				p.Info("No operation to resume found.")
+				p.Debug("No operation to resume found.")
 			} else {
-				p.Errorf("Failed to resume last operation: %v.", trace.DebugReport(err))
+				p.WithError(err).Error("Failed to resume last operation.")
 			}
 		case <-ctx.Done():
 			return
@@ -1107,7 +1111,7 @@ func (p *Process) initCertificateAuthority() error {
 	return nil
 }
 
-func (p *Process) inKubernetes() bool {
+func inKubernetes() bool {
 	return os.Getenv(constants.EnvPodIP) != ""
 }
 
@@ -1305,7 +1309,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 	}
 
 	var client *kubernetes.Clientset
-	if p.inKubernetes() {
+	if inKubernetes() {
 		client, err = tryGetPrivilegedKubeClient()
 		if err != nil {
 			return trace.Wrap(err)
@@ -1346,7 +1350,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 	}
 	p.applications = applications
 
-	if p.inKubernetes() {
+	if inKubernetes() {
 		p.handlers.Registry, err = docker.NewRegistry(docker.Config{
 			Context:       ctx,
 			Users:         p.identity,
@@ -1380,7 +1384,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 
 	var logs opsservice.LogForwardersControl
 	var openebs opsservice.OpenEBSControl
-	if p.inKubernetes() {
+	if inKubernetes() {
 		logs = opsservice.NewLogForwardersControl(client)
 		openebs, err = opsservice.NewOpenEBSControl(opsservice.OpenEBSConfig{
 			Client: client,
@@ -1471,7 +1475,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 
 	// a few services that are running only when gravity is started in
 	// local site mode
-	if p.inKubernetes() {
+	if inKubernetes() {
 		if p.leader == nil {
 			return trace.BadParameter(
 				"cluster requires backend with election capability")
@@ -1522,7 +1526,7 @@ func (p *Process) initService(ctx context.Context) (err error) {
 		Tunnel: reverseTunnel,
 	}
 
-	if p.inKubernetes() {
+	if inKubernetes() {
 		serverVersion, err := client.ServerVersion()
 		if err != nil {
 			return trace.Wrap(err, "failed to query kubernetes server version")
@@ -1817,7 +1821,7 @@ func (p *Process) startListening(handler http.Handler, addr string) (net.Listene
 // retrieved from the cluster-tls secret. Otherwise (or if that fails) it
 // falls back to self-signed certificate and key.
 func (p *Process) getTLSConfig() (*tls.Config, error) {
-	if p.inKubernetes() {
+	if inKubernetes() {
 		config, err := p.tryGetTLSConfig()
 		if err == nil {
 			return config, nil
@@ -1900,7 +1904,7 @@ func (p *Process) newTLSConfig(certPEM, keyPEM []byte) (*tls.Config, error) {
 	// When running inside a deployed cluster, configure client certificate
 	// authentication so clients such as tele can authenticate with the API
 	// using certificates issued by Teleport.
-	if p.inKubernetes() {
+	if inKubernetes() {
 		// This setting will prompt the server to send a certificate request
 		// to connecting clients which will make clients to optionally provide
 		// a certificate.
@@ -2145,7 +2149,7 @@ func (p *Process) initAccount() error {
 	}
 
 	if err := p.fixOpsCenterRoles(*account); err != nil {
-		p.Errorf("Failed to migrate Gravity Hub: %v.", trace.DebugReport(err))
+		p.WithError(err).Warn("Failed to migrate Gravity Hub.")
 	}
 
 	return nil

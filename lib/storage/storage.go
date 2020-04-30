@@ -1628,6 +1628,11 @@ func (s *Server) EtcdPeerURL() string {
 	return fmt.Sprintf("https://%v:%v", s.AdvertiseIP, defaults.EtcdPeerPort)
 }
 
+// ObjectPeerID returns the peer ID of this server
+func (s *Server) ObjectPeerID() string {
+	return s.AdvertiseIP
+}
+
 // IsMaster returns true if the server has a master role
 func (s *Server) IsMaster() bool {
 	return s.ClusterRole == string(schema.ServiceRoleMaster)
