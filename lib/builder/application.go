@@ -20,8 +20,13 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	"github.com/gravitational/gravity/lib/app/service"
+	"github.com/gravitational/gravity/lib/defaults"
+	"github.com/gravitational/gravity/lib/docker"
+	"github.com/gravitational/gravity/lib/localenv"
+	"github.com/gravitational/gravity/lib/pack"
 
 	"github.com/gravitational/trace"
 	"k8s.io/helm/pkg/chartutil"
@@ -79,7 +84,24 @@ func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) 
 
 	if req.From != "" {
 		b.NextStep("Discovering Docker images in the existing application image")
-		//		skipImages, err := docker.ListImages(ctx,
+		imageEnv, err := localenv.NewImageEnvironment(req.From)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		defer imageEnv.Close()
+		dir, err := ioutil.TempDir("", "patch")
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		defer os.RemoveAll(dir)
+		err = pack.Unpack(imageEnv.Packages, imageEnv.Manifest.Locator(), dir, nil)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		req.Vendor.SkipImages, err = docker.ListImages(ctx, filepath.Join(dir, defaults.RegistryDir))
+		if err != nil {
+			return trace.Wrap(err)
+		}
 	}
 
 	vendorDir, err := ioutil.TempDir("", "vendor")

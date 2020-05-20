@@ -52,7 +52,7 @@ func NewImageEnvironment(path string) (*ImageEnvironment, error) {
 		_, err := os.Stat(filepath.Join(path, defaults.ManifestFileName))
 		if err != nil {
 			return nil, trace.BadParameter("directory %q does not appear "+
-				"to contain an application image", path)
+				"to contain an application or cluster image", path)
 		}
 		return newImageEnvironment(path)
 	}
@@ -63,7 +63,7 @@ func NewImageEnvironment(path string) (*ImageEnvironment, error) {
 			return nil, trace.Wrap(err)
 		}
 		return nil, trace.BadParameter("file %q does not appear to be "+
-			"a valid application image", path)
+			"a valid application or cluster image", path)
 	}
 	// extract tarball to a temporary directory
 	unpackedPath, err := archive.Unpack(path)
