@@ -48,6 +48,8 @@ type BuildParameters struct {
 	Vendor service.VendorRequest
 	// BaseImage sets base image for the cluster image
 	BaseImage string
+	// UpgradeFrom
+	UpgradeFrom string
 }
 
 // Level returns level at which the progress should be reported based on the CLI parameters.
@@ -97,5 +99,6 @@ func buildApplicationImage(ctx context.Context, params BuildParameters) error {
 		OutputPath: params.OutPath,
 		Overwrite:  params.Overwrite,
 		Vendor:     params.Vendor,
+		From:       params.UpgradeFrom,
 	})
 }

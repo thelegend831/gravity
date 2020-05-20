@@ -86,6 +86,8 @@ type HelmBuildCmd struct {
 	Values *[]string
 	// Pull allows to force-pull Docker images even if they're already present.
 	Pull *bool
+	// UpgradeFrom is a path to the image to build a patch off of.
+	UpgradeFrom *string
 }
 
 // BuildCmd builds app installer tarball
@@ -125,6 +127,8 @@ type BuildCmd struct {
 	Pull *bool
 	// BaseImage allows to specify base image on the CLI.
 	BaseImage *string
+	// UpgradeFrom is a path to the image to build a patch off of.
+	UpgradeFrom *string
 }
 
 type ListCmd struct {

@@ -52,6 +52,8 @@ type ApplicationRequest struct {
 	Overwrite bool
 	// Vendor combines vendoring parameters.
 	Vendor service.VendorRequest
+	// From
+	From string
 }
 
 // Build builds an application image according to the provided parameters.
@@ -74,6 +76,10 @@ func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) 
 	locator := imageLocator(manifest, req.Vendor)
 	b.NextStep("Building application image %v %v from Helm chart", locator.Name,
 		locator.Version)
+
+	if req.From != "" {
+		b.NextStep("Discovering Docker images in the existing application image")
+	}
 
 	vendorDir, err := ioutil.TempDir("", "vendor")
 	if err != nil {

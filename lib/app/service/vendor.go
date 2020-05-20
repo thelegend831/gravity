@@ -103,6 +103,8 @@ type VendorRequest struct {
 	IgnoreResourcePatterns []string
 	// SetImages is a list of images to rewrite to new versions
 	SetImages []loc.DockerImage
+	// SkipImages is a list of Docker images to skip from vendoring
+	SkipImages []loc.DockerImage
 	// SetDeps is a list of app dependencies to rewrite to new versions
 	SetDeps []loc.Locator
 	// VendorRuntime specifies whether to translate runtime images into packages.
@@ -288,6 +290,8 @@ func (v *vendorer) VendorDir(ctx context.Context, unpackedDir string, req Vendor
 	for i, image := range images {
 		images[i] = v.imageService.Unwrap(image)
 	}
+
+	var imagesToVendor, chartImagesToVendor []string
 
 	log.Infof("No registry layers found, will pull and export images %q.", images)
 	if err = v.pullAndExportImages(ctx, teleutils.Deduplicate(images), unpackedDir, req.Parallel, req.ProgressReporter); err != nil {
