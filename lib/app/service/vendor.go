@@ -104,7 +104,7 @@ type VendorRequest struct {
 	// SetImages is a list of images to rewrite to new versions
 	SetImages []loc.DockerImage
 	// SkipImages is a list of Docker images to skip from vendoring
-	SkipImages []loc.DockerImage
+	SkipImages []string
 	// SetDeps is a list of app dependencies to rewrite to new versions
 	SetDeps []loc.Locator
 	// VendorRuntime specifies whether to translate runtime images into packages.
@@ -292,13 +292,27 @@ func (v *vendorer) VendorDir(ctx context.Context, unpackedDir string, req Vendor
 	}
 
 	var imagesToVendor, chartImagesToVendor []string
+	for _, image := range teleutils.Deduplicate(images) {
+		if utils.StringInSlice(req.SkipImages, image) {
+			req.ProgressReporter.PrintSubStep("Skip image %v")
+		} else {
+			imagesToVendor = append(imagesToVendor, image)
+		}
+	}
+	for _, image := range teleutils.Deduplicate(chartImagesToVendor) {
+		if utils.StringInSlice(req.SkipImages, image) {
+			req.ProgressReporter.PrintSubStep("Skip image %v")
+		} else {
+			chartImagesToVendor = append(chartImagesToVendor, image)
+		}
+	}
 
 	log.Infof("No registry layers found, will pull and export images %q.", images)
-	if err = v.pullAndExportImages(ctx, teleutils.Deduplicate(images), unpackedDir, req.Parallel, req.ProgressReporter); err != nil {
+	if err = v.pullAndExportImages(ctx, imagesToVendor, unpackedDir, req.Parallel, req.ProgressReporter); err != nil {
 		return trace.Wrap(err)
 	}
 
-	if err = v.pullAndExportImages(ctx, teleutils.Deduplicate(chartImages), unpackedDir, req.Parallel, req.ProgressReporter); err != nil {
+	if err = v.pullAndExportImages(ctx, chartImagesToVendor, unpackedDir, req.Parallel, req.ProgressReporter); err != nil {
 		return trace.Wrap(err)
 	}
 

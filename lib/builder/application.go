@@ -79,6 +79,7 @@ func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) 
 
 	if req.From != "" {
 		b.NextStep("Discovering Docker images in the existing application image")
+		//		skipImages, err := docker.ListImages(ctx,
 	}
 
 	vendorDir, err := ioutil.TempDir("", "vendor")
