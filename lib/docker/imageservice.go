@@ -509,7 +509,7 @@ func ping(transport http.RoundTripper, registryAddr string) (registryauthchallen
 }
 
 // TODO
-func ListImages(ctx context.Context, dir string) (images []string, err error) {
+func ListImages(ctx context.Context, dir string) (images []loc.DockerImage, err error) {
 	localStore, err := openLocal(dir)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -528,7 +528,10 @@ func ListImages(ctx context.Context, dir string) (images []string, err error) {
 			return nil, trace.Wrap(err)
 		}
 		for _, tag := range tags {
-			images = append(images, name+"/"+tag)
+			images = append(images, loc.DockerImage{
+				Repository: name,
+				Tag:        tag,
+			})
 		}
 	}
 	return images, nil

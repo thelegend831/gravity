@@ -20,13 +20,10 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 
 	"github.com/gravitational/gravity/lib/app/service"
-	"github.com/gravitational/gravity/lib/defaults"
-	"github.com/gravitational/gravity/lib/docker"
-	"github.com/gravitational/gravity/lib/localenv"
-	"github.com/gravitational/gravity/lib/pack"
+	"github.com/gravitational/gravity/lib/loc"
+	"github.com/gravitational/gravity/lib/schema"
 
 	"github.com/gravitational/trace"
 	"k8s.io/helm/pkg/chartutil"
@@ -61,6 +58,40 @@ type ApplicationRequest struct {
 	From string
 }
 
+type InspectResponse struct {
+	Manifest *schema.Manifest
+	Images   []loc.DockerImage
+}
+
+func (b *applicationBuilder) Inspect(req ApplicationRequest) (*InspectResponse, error) {
+	chart, err := chartutil.Load(req.ChartPath)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	manifest, err := generateApplicationImageManifest(chart)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	vendorDir, err := ioutil.TempDir("", "vendor")
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	defer os.RemoveAll(vendorDir)
+	images, err := b.GetImages(VendorRequest{
+		SourceDir: req.ChartPath,
+		VendorDir: vendorDir,
+		Manifest:  manifest,
+		Vendor:    req.Vendor,
+	})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return &InspectResponse{
+		Manifest: manifest,
+		Images:   images,
+	}, nil
+}
+
 // Build builds an application image according to the provided parameters.
 func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) error {
 	chart, err := chartutil.Load(req.ChartPath)
@@ -84,24 +115,11 @@ func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) 
 
 	if req.From != "" {
 		b.NextStep("Discovering Docker images in the existing application image")
-		imageEnv, err := localenv.NewImageEnvironment(req.From)
+		response, err := GetImages(ctx, req.From)
 		if err != nil {
 			return trace.Wrap(err)
 		}
-		defer imageEnv.Close()
-		dir, err := ioutil.TempDir("", "patch")
-		if err != nil {
-			return trace.Wrap(err)
-		}
-		defer os.RemoveAll(dir)
-		err = pack.Unpack(imageEnv.Packages, imageEnv.Manifest.Locator(), dir, nil)
-		if err != nil {
-			return trace.Wrap(err)
-		}
-		req.Vendor.SkipImages, err = docker.ListImages(ctx, filepath.Join(dir, defaults.RegistryDir))
-		if err != nil {
-			return trace.Wrap(err)
-		}
+		req.Vendor.SkipImages = response.Images
 	}
 
 	vendorDir, err := ioutil.TempDir("", "vendor")

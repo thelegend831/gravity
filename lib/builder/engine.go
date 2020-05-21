@@ -231,22 +231,46 @@ type VendorRequest struct {
 // Vendor vendors the application images in the provided directory and
 // returns the compressed data stream with the application data
 func (b *Engine) Vendor(ctx context.Context, req VendorRequest) (io.ReadCloser, error) {
-	err := utils.CopyDirContents(req.SourceDir, filepath.Join(req.VendorDir, defaults.ResourcesDir))
+	vendorer, vendorReq, err := b.getVendorer(req)
 	if err != nil {
 		return nil, trace.Wrap(err)
+	}
+	err = vendorer.VendorDir(ctx, req.VendorDir, *vendorReq)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return archive.Tar(req.VendorDir, archive.Uncompressed)
+}
+
+func (b *Engine) GetImages(req VendorRequest) ([]loc.DockerImage, error) {
+	vendorer, vendorReq, err := b.getVendorer(req)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	images, err := vendorer.GetImages(req.VendorDir, *vendorReq)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return images, nil
+}
+
+func (b *Engine) getVendorer(req VendorRequest) (service.Vendorer, *service.VendorRequest, error) {
+	err := utils.CopyDirContents(req.SourceDir, filepath.Join(req.VendorDir, defaults.ResourcesDir))
+	if err != nil {
+		return nil, nil, trace.Wrap(err)
 	}
 	manifestPath := filepath.Join(req.VendorDir, defaults.ResourcesDir, "app.yaml")
 	data, err := yaml.Marshal(req.Manifest)
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, nil, trace.Wrap(err)
 	}
 	err = ioutil.WriteFile(manifestPath, data, defaults.SharedReadMask)
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, nil, trace.Wrap(err)
 	}
 	dockerClient, err := docker.NewDefaultClient()
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, nil, trace.Wrap(err)
 	}
 	vendorer, err := service.NewVendorer(service.VendorerConfig{
 		DockerClient: dockerClient,
@@ -255,16 +279,12 @@ func (b *Engine) Vendor(ctx context.Context, req VendorRequest) (io.ReadCloser, 
 		Packages:     b.Packages,
 	})
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, nil, trace.Wrap(err)
 	}
 	vendorReq := req.Vendor
 	vendorReq.ManifestPath = manifestPath
 	vendorReq.ProgressReporter = b.Progress
-	err = vendorer.VendorDir(ctx, req.VendorDir, vendorReq)
-	if err != nil {
-		return nil, trace.Wrap(err)
-	}
-	return archive.Tar(req.VendorDir, archive.Uncompressed)
+	return vendorer, &vendorReq, nil
 }
 
 // CreateApplication creates a Gravity application from the provided

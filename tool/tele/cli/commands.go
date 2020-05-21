@@ -88,6 +88,8 @@ type HelmBuildCmd struct {
 	Pull *bool
 	// UpgradeFrom is a path to the image to build a patch off of.
 	UpgradeFrom *string
+	// Diff
+	Diff *bool
 }
 
 // BuildCmd builds app installer tarball

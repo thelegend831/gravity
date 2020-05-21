@@ -88,6 +88,7 @@ func Run(tele Application) error {
 			Verbose:     *tele.HelmBuildCmd.Verbose,
 			Insecure:    *tele.Insecure,
 			UpgradeFrom: *tele.HelmBuildCmd.UpgradeFrom,
+			Diff:        *tele.HelmBuildCmd.Diff,
 			Vendor: service.VendorRequest{
 				ResourcePatterns:       *tele.HelmBuildCmd.VendorPatterns,
 				IgnoreResourcePatterns: *tele.HelmBuildCmd.VendorIgnorePatterns,

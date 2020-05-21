@@ -18,11 +18,19 @@ package cli
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"os"
+	"sort"
 
 	"github.com/gravitational/gravity/lib/app/service"
 	"github.com/gravitational/gravity/lib/builder"
 	"github.com/gravitational/gravity/lib/utils"
+	"github.com/gravitational/gravity/tool/common"
 
+	"github.com/buger/goterm"
+	"github.com/fatih/color"
+	teleutils "github.com/gravitational/teleport/lib/utils"
 	"github.com/gravitational/trace"
 )
 
@@ -50,6 +58,8 @@ type BuildParameters struct {
 	BaseImage string
 	// UpgradeFrom
 	UpgradeFrom string
+	// Diff
+	Diff bool
 }
 
 // Level returns level at which the progress should be reported based on the CLI parameters.
@@ -89,6 +99,9 @@ func buildClusterImage(ctx context.Context, params BuildParameters) error {
 }
 
 func buildApplicationImage(ctx context.Context, params BuildParameters) error {
+	if params.Diff {
+		return diffApplicationImage(params)
+	}
 	appBuilder, err := builder.NewApplicationBuilder(params.BuilderConfig())
 	if err != nil {
 		return trace.Wrap(err)
@@ -101,4 +114,56 @@ func buildApplicationImage(ctx context.Context, params BuildParameters) error {
 		Vendor:     params.Vendor,
 		From:       params.UpgradeFrom,
 	})
+}
+
+func diffApplicationImage(params BuildParameters) error {
+	appBuilder, err := builder.NewApplicationBuilder(params.BuilderConfig())
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	defer appBuilder.Close()
+
+	newImage, err := appBuilder.Inspect(builder.ApplicationRequest{
+		ChartPath: params.SourcePath,
+		Vendor:    params.Vendor,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	var newImages []string
+	for _, image := range newImage.Images {
+		newImages = append(newImages, image.Repository+":"+image.Tag)
+	}
+
+	oldImage, err := builder.GetImages(context.TODO(), params.UpgradeFrom)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	var oldImages []string
+	for _, image := range oldImage.Images {
+		oldImages = append(oldImages, image.Repository+":"+image.Tag)
+	}
+
+	allImages := teleutils.Deduplicate(append(oldImages, newImages...))
+	sort.Strings(allImages)
+
+	t := goterm.NewTable(0, 10, 5, ' ', 0)
+	common.PrintTableHeader(t, []string{oldImage.Manifest.Locator().String(), newImage.Manifest.Locator().String()})
+	for _, image := range allImages {
+		isOld := utils.StringInSlice(oldImages, image)
+		isNew := utils.StringInSlice(newImages, image)
+		if isOld && isNew {
+			fmt.Fprintf(t, "%v\t%v\n", image, image)
+		} else if isOld {
+			fmt.Fprintf(t, "%v\t%v\n", color.RedString(image), "")
+		} else {
+			fmt.Fprintf(t, "%v\t%v\n", "", color.GreenString(image))
+		}
+	}
+	_, err = io.WriteString(os.Stdout, t.String())
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	return nil
 }

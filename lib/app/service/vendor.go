@@ -85,6 +85,8 @@ type Vendorer interface {
 	VendorDir(ctx context.Context, dir string, req VendorRequest) error
 	// VendorTarball is the same as VendorDir but accepts a tarball stream and unpacks it before vendoring
 	VendorTarball(ctx context.Context, tarball io.ReadCloser, req VendorRequest) (string, error)
+	//
+	GetImages(dir string, req VendorRequest) ([]loc.DockerImage, error)
 }
 
 // VendorRequest combined various vendoring options
@@ -104,7 +106,7 @@ type VendorRequest struct {
 	// SetImages is a list of images to rewrite to new versions
 	SetImages []loc.DockerImage
 	// SkipImages is a list of Docker images to skip from vendoring
-	SkipImages []string
+	SkipImages loc.DockerImages
 	// SetDeps is a list of app dependencies to rewrite to new versions
 	SetDeps []loc.Locator
 	// VendorRuntime specifies whether to translate runtime images into packages.
@@ -154,11 +156,50 @@ func (v *vendorer) VendorTarball(ctx context.Context, tarball io.ReadCloser, req
 	return unpackedDir, trace.Wrap(v.VendorDir(ctx, unpackedDir, req))
 }
 
+func (v *vendorer) GetImages(unpackedDir string, req VendorRequest) ([]loc.DockerImage, error) {
+	if req.ManifestPath != "" {
+		if err := expandEnvVars(req.ManifestPath); err != nil {
+			return nil, trace.Wrap(err)
+		}
+	}
+	resourceFiles, chartResources, err := resourcesFromPath(unpackedDir, req)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	err = resourceFiles.RewriteManifest(makeRewriteMultiSourceFunc(req.ManifestPath), makeRewriteWormholeJobFunc())
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	err = resourceFiles.RewriteImages(makeRewriteSetImagesFunc(req.SetImages))
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	images, err := resourceFiles.Images()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	chartImages, err := chartResources.Images()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	var result []loc.DockerImage
+	for _, image := range teleutils.Deduplicate(append(images, chartImages...)) {
+		parsed, err := loc.ParseDockerImage(image)
+		if err != nil {
+			return nil, trace.Wrap(err)
+		}
+		result = append(result, *parsed)
+	}
+	return result, nil
+}
+
 // VendorDir creates an application tarball from the unpackedDir using configuration specified in req.
 //
 // It will detect and import missing docker images and rewrite image references in all resource files
 // to point to a fixed docker registry address.
 func (v *vendorer) VendorDir(ctx context.Context, unpackedDir string, req VendorRequest) error {
+	log.Infof("%#v", req)
+
 	if req.ProgressReporter == nil {
 		req.ProgressReporter = utils.DiscardProgress
 	}
@@ -293,15 +334,17 @@ func (v *vendorer) VendorDir(ctx context.Context, unpackedDir string, req Vendor
 
 	var imagesToVendor, chartImagesToVendor []string
 	for _, image := range teleutils.Deduplicate(images) {
-		if utils.StringInSlice(req.SkipImages, image) {
-			req.ProgressReporter.PrintSubStep("Skip image %v")
+		log.Debugf("Searching for %q in %v", image, req.SkipImages)
+		if utils.StringInSlice(req.SkipImages.Images(), image) {
+			req.ProgressReporter.PrintSubStep("Skip image %v", image)
 		} else {
 			imagesToVendor = append(imagesToVendor, image)
 		}
 	}
-	for _, image := range teleutils.Deduplicate(chartImagesToVendor) {
-		if utils.StringInSlice(req.SkipImages, image) {
-			req.ProgressReporter.PrintSubStep("Skip image %v")
+	for _, image := range teleutils.Deduplicate(chartImages) {
+		log.Debugf("Searching for %q in %v", image, req.SkipImages)
+		if utils.StringInSlice(req.SkipImages.Images(), image) {
+			req.ProgressReporter.PrintSubStep("Skip image %v", image)
 		} else {
 			chartImagesToVendor = append(chartImagesToVendor, image)
 		}
