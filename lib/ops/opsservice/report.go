@@ -41,7 +41,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (s *site) getClusterReport() (io.ReadCloser, error) {
+func (s *site) getClusterReport(ctx context.Context) (io.ReadCloser, error) {
 	op, err := storage.GetLastOperationForCluster(s.backend(), s.domainName)
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -50,14 +50,14 @@ func (s *site) getClusterReport() (io.ReadCloser, error) {
 	s.WithField("op", op).Info("Capture debug report for operation.")
 	switch {
 	case isActiveInstallOperation((ops.SiteOperation)(*op)):
-		return s.getClusterInstallReport((ops.SiteOperation)(*op))
+		return s.getClusterInstallReport(ctx, (ops.SiteOperation)(*op))
 	default:
-		return s.getClusterGenericReport()
+		return s.getClusterGenericReport(ctx)
 	}
 }
 
-func (s *site) getClusterInstallReport(op ops.SiteOperation) (io.ReadCloser, error) {
-	ctx, err := s.newOperationContext(op)
+func (s *site) getClusterInstallReport(ctx context.Context, op ops.SiteOperation) (io.ReadCloser, error) {
+	opCtx, err := s.newOperationContext(op)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -69,7 +69,7 @@ func (s *site) getClusterInstallReport(op ops.SiteOperation) (io.ReadCloser, err
 	}
 
 	var master remoteServer
-	remoteServers := make([]remoteServer, 0, len(ctx.provisionedServers))
+	remoteServers := make([]remoteServer, 0, len(opCtx.provisionedServers))
 	for _, server := range servers {
 		remoteServers = append(remoteServers, server)
 		if server.IsMaster() && master == nil {
@@ -77,11 +77,11 @@ func (s *site) getClusterInstallReport(op ops.SiteOperation) (io.ReadCloser, err
 		}
 	}
 
-	runner := s.agentRunner(ctx)
-	return s.getReport(runner, remoteServers, master)
+	runner := s.agentRunner(opCtx)
+	return s.getReport(ctx, runner, remoteServers, master)
 }
 
-func (s *site) getClusterGenericReport() (io.ReadCloser, error) {
+func (s *site) getClusterGenericReport(ctx context.Context) (io.ReadCloser, error) {
 	const noRetry = 1
 	servers, err := s.getTeleportServersWithTimeout(
 		nil,
@@ -112,20 +112,20 @@ func (s *site) getClusterGenericReport() (io.ReadCloser, error) {
 		remoteServers = append(remoteServers, teleportServer)
 	}
 
-	return s.getReport(teleportRunner, remoteServers, master)
+	return s.getReport(ctx, teleportRunner, remoteServers, master)
 }
 
-func (s *site) getReport(runner remoteRunner, servers []remoteServer, master remoteServer) (io.ReadCloser, error) {
+func (s *site) getReport(ctx context.Context, runner remoteRunner, servers []remoteServer, master remoteServer) (io.ReadCloser, error) {
 	dir, err := ioutil.TempDir("", "report")
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
-	err = runCollectors(*s, dir)
+	err = runCollectors(ctx, *s, dir)
 	if err != nil {
 		// Intermediate steps in diagnostics collection are not fatal
 		// to collect all possible pieces in best-effort
-		log.Errorf("failed to run cluster collectors: %v", trace.DebugReport(err))
+		log.WithError(err).Warn("Failed to run cluster collectors.")
 	}
 
 	if err := collectOperationsLogs(*s, dir); err != nil {
@@ -141,17 +141,18 @@ func (s *site) getReport(runner remoteRunner, servers []remoteServer, master rem
 		}
 		serverRunner := &serverRunner{server: server, runner: runner}
 		reportWriter := getReportWriterForServer(dir, server)
+		logger := log.WithField("server", server.Address())
 		if err := s.collectKubernetesInfo(reportWriter, serverRunner); err != nil {
-			log.WithError(err).Error("Failed to collect Kubernetes info.")
+			logger.WithError(err).Error("Failed to collect Kubernetes info.")
 		}
 		if err := s.collectEtcdBackup(reportWriter, serverRunner); err != nil {
-			log.WithError(err).Error("Failed to collect etcd backup.")
+			logger.WithError(err).Error("Failed to collect etcd backup.")
 		}
-		if err := s.collectDebugInfoFromServers(dir, servers, runner); err != nil {
+		if err := s.collectDebugInfoFromServers(ctx, dir, servers, runner); err != nil {
 			log.WithError(err).Error("Failed to collect diagnostics from some nodes.")
 		}
 		if err := s.collectStatusTimeline(reportWriter, serverRunner); err != nil {
-			log.WithError(err).Error("Failed to collect status timeline.")
+			logger.WithError(err).Error("Failed to collect status timeline.")
 		}
 	}
 
@@ -180,9 +181,9 @@ func (s *site) getReport(runner remoteRunner, servers []remoteServer, master rem
 //
 //   <server-name>-<resource>
 //
-func (s *site) collectDebugInfoFromServers(dir string, servers []remoteServer, runner remoteRunner) error {
-	err := s.executeOnServers(context.TODO(), servers, func(c context.Context, server remoteServer) error {
-		log.Debugf("collectDebugInfo for %v", server)
+func (s *site) collectDebugInfoFromServers(ctx context.Context, dir string, servers []remoteServer, runner remoteRunner) error {
+	err := s.executeOnServers(ctx, servers, func(c context.Context, server remoteServer) error {
+		log.WithField("server", server.Debug()).Debug("Collect debug info.")
 		r := &serverRunner{
 			server: server,
 			runner: runner,
@@ -256,23 +257,23 @@ func (s *site) collectStatusTimeline(reportWriter report.FileWriter, runner *ser
 	return nil
 }
 
-func runCollectors(site site, dir string) error {
-	storageSite, err := site.service.cfg.Backend.GetSite(site.domainName)
+func runCollectors(ctx context.Context, cluster site, dir string) error {
+	storageSite, err := cluster.service.cfg.Backend.GetSite(cluster.domainName)
 	if err != nil {
 		return trace.Wrap(err)
 	}
 
 	collectors := []collectorFn{
-		collectSiteInfo(*storageSite),
+		collectClusterInfo(*storageSite),
 		collectDumpHook,
 	}
 	reportWriter := report.NewFileWriter(dir)
 
 	// collect information from all collectors
 	for _, collector := range collectors {
-		err := collector(reportWriter, site)
+		err := collector(ctx, reportWriter, cluster)
 		if err != nil {
-			log.Errorf("failed to collect diagnostics: %v", trace.DebugReport(err))
+			log.WithError(err).Error("Failed to collect diagnostics.")
 		}
 	}
 	return nil
@@ -296,10 +297,10 @@ func collectOperationsLogs(site site, dir string) error {
 	return nil
 }
 
-// collectSiteInfo returns JSON-formatted site information
-func collectSiteInfo(s storage.Site) collectorFn {
-	return func(reportWriter report.FileWriter, site site) error {
-		w, err := reportWriter.NewWriter(siteInfoFilename)
+// collectClusterInfo returns JSON-formatted cluster information
+func collectClusterInfo(s storage.Site) collectorFn {
+	return func(_ context.Context, reportWriter report.FileWriter, _ site) error {
+		w, err := reportWriter.NewWriter(clusterInfoFilename)
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -316,7 +317,7 @@ func collectSiteInfo(s storage.Site) collectorFn {
 }
 
 // collectDumpHook returns the output of the dump hook
-func collectDumpHook(reportWriter report.FileWriter, site site) error {
+func collectDumpHook(ctx context.Context, reportWriter report.FileWriter, site site) error {
 	if !site.app.Manifest.HasHook(schema.HookDump) {
 		return nil
 	}
@@ -327,7 +328,7 @@ func collectDumpHook(reportWriter report.FileWriter, site site) error {
 	}
 	defer w.Close()
 
-	_, out, err := app.RunAppHook(context.TODO(), site.appService, app.HookRunRequest{
+	_, out, err := app.RunAppHook(ctx, site.appService, app.HookRunRequest{
 		Application: site.app.Package,
 		Hook:        schema.HookDump,
 		ServiceUser: site.serviceUser(),
@@ -358,7 +359,7 @@ func collectOperationLogs(site site, operation ops.SiteOperation, reportWriter r
 	return trace.Wrap(err)
 }
 
-type collectorFn func(report.FileWriter, site) error
+type collectorFn func(context.Context, report.FileWriter, site) error
 
 func getReportWriterForServer(dir string, server remoteServer) report.FileWriter {
 	return report.FileWriterFunc(func(name string) (io.WriteCloser, error) {
@@ -372,8 +373,8 @@ func isActiveInstallOperation(op ops.SiteOperation) bool {
 }
 
 const (
-	// siteInfoFilename is the name of the file with JSON-dumped site
-	siteInfoFilename = "site.json"
+	// clusterInfoFilename is the name of the file with JSON-encoded cluster metadata
+	clusterInfoFilename = "cluster.json"
 	// dumpHookFilename is the name of the file with dump hook output
 	dumpHookFilename = "dump-hook"
 	// opLogsFilename defines the file pattern that stores operation log for a particular

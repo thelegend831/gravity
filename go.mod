@@ -13,7 +13,6 @@ require (
 	github.com/alecthomas/colour v0.1.0 // indirect
 	github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1 // indirect
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
-	github.com/aokoli/goutils v1.0.1 // indirect
 	github.com/apparentlymart/go-cidr v1.0.0 // indirect
 	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/aws/aws-sdk-go v1.16.26
@@ -24,6 +23,7 @@ require (
 	github.com/buger/goterm v0.0.0-20140416104154-af3f07dadc88
 	github.com/cenkalti/backoff v1.1.0
 	github.com/chai2010/gettext-go v0.0.0-20170215093142-bf70f2a70fb1 // indirect
+	github.com/client9/misspell v0.3.4 // indirect
 	github.com/cloudflare/cfssl v0.0.0-20180726162950-56268a613adf
 	github.com/cloudfoundry/gosigar v0.0.0-20170815193638-f4030c18ce1a
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
@@ -55,11 +55,8 @@ require (
 	github.com/gokyle/hotp v0.0.0-20160218004637-c180d57d286b
 	github.com/golang/protobuf v1.3.2
 	github.com/google/go-cmp v0.3.1 // indirect
-	github.com/google/gops v0.3.8 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/gorilla/handlers v0.0.0-20151124211609-e96366d97736 // indirect
-	github.com/gosimple/slug v1.9.0 // indirect
-	github.com/gravitational/bandwagon v0.0.0-20200215230242-8a67c7595376 // indirect
 	github.com/gravitational/configure v0.0.0-20191213111049-fce91dea0d0d
 	github.com/gravitational/coordinate v0.0.0-20180225144834-2bc9a83f6fe2
 	github.com/gravitational/form v0.0.0-20151109031454-c4048f792f70
@@ -116,7 +113,6 @@ require (
 	github.com/opencontainers/runc v0.1.1 // indirect
 	github.com/opencontainers/selinux v1.4.0
 	github.com/pborman/uuid v1.2.0
-	github.com/petar/GoLLRB v0.0.0-20130427215148-53be0d36a84c // indirect
 	github.com/posener/complete v1.1.2 // indirect
 	github.com/pquerna/otp v0.0.0-20160912161815-54653902c20e // indirect
 	github.com/prometheus/alertmanager v0.20.0
@@ -128,7 +124,6 @@ require (
 	github.com/santhosh-tekuri/jsonschema v1.2.2
 	github.com/shurcooL/sanitized_anchor_name v0.0.0-20170918181015-86672fcb3f95 // indirect
 	github.com/sirupsen/logrus v1.4.2
-	github.com/stevvooe/resumable v0.0.0-20150521211217-51ad44105773 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/tstranex/u2f v0.0.0-20160508205855-eb799ce68da4
 	github.com/ugorji/go v1.1.7 // indirect
@@ -141,12 +136,13 @@ require (
 	github.com/xtgo/set v1.0.0
 	github.com/zclconf/go-cty v0.0.0-20180829180805-c2393a5d54f2 // indirect
 	github.com/ziutek/mymysql v1.5.4 // indirect
+	go.etcd.io/bbolt v1.3.4 // indirect
 	go.mongodb.org/mongo-driver v1.0.4 // indirect
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
-	golang.org/x/sys v0.0.0-20191115151921-52ab43148777
-	gonum.org/v1/gonum v0.6.1 // indirect
+	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5
 	google.golang.org/grpc v1.26.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127
@@ -154,11 +150,11 @@ require (
 	gopkg.in/mgo.v2 v2.0.0-20160818020120-3f83fa500528 // indirect
 	gopkg.in/square/go-jose.v2 v2.2.0 // indirect
 	gopkg.in/yaml.v2 v2.2.4
+	honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc // indirect
 	k8s.io/api v0.15.7
 	k8s.io/apiextensions-apiserver v0.0.0
 	k8s.io/apimachinery v0.15.7
 	k8s.io/client-go v2.0.0-alpha.0.0.20181121191925-a47917edff34+incompatible
-	k8s.io/gengo v0.0.0-20191120174120-e74f70b9b27e // indirect
 	k8s.io/helm v2.15.2+incompatible
 	k8s.io/kube-aggregator v0.0.0
 	k8s.io/kubernetes v1.15.7

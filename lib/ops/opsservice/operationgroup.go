@@ -168,7 +168,7 @@ func (g *operationGroup) canCreateExpandOperation(site ops.Site, operation ops.S
 	}
 
 	// cluster is not active, but there are no expand operations so there is either
-	// other type of operation in progress, or it's degraded
+	// other type of operation is in progress, or it's degraded
 	if len(operations) == 0 {
 		if site.State == ops.SiteStateDegraded {
 			return utils.ClusterDegradedError{}
@@ -220,7 +220,7 @@ func (g *operationGroup) canCreateExpandOperation(site ops.Site, operation ops.S
 // In the case the operation moves to its final state, it also updates the cluster
 // state accordingly (e.g. moves the cluster from 'expanding' to 'active' if no other
 // expand operations are running).
-func (g *operationGroup) compareAndSwapOperationState(swap swap) (*ops.SiteOperation, error) {
+func (g *operationGroup) compareAndSwapOperationState(ctx context.Context, swap swap) (*ops.SiteOperation, error) {
 	g.Lock()
 	defer g.Unlock()
 
@@ -239,12 +239,12 @@ func (g *operationGroup) compareAndSwapOperationState(swap swap) (*ops.SiteOpera
 			"operation %v is not in %v", operation, swap.expectedStates)
 	}
 
-	site, err := g.operator.openSite(g.siteKey)
+	cluster, err := g.operator.openSite(g.siteKey)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
 
-	operation, err = site.setOperationState(operation.Key(), swap.newOpState)
+	operation, err = cluster.setOperationState(operation.Key(), swap.newOpState)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -252,7 +252,7 @@ func (g *operationGroup) compareAndSwapOperationState(swap swap) (*ops.SiteOpera
 	// if we've just moved the operation to one of the final states (completed/failed),
 	// see if we also need to update the site state
 	if operation.IsFinished() {
-		err = g.emitAuditEvent(context.TODO(), *operation)
+		err = g.emitAuditEvent(ctx, *operation)
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
@@ -272,6 +272,7 @@ func (g *operationGroup) onSiteOperationComplete(key ops.SiteOperationKey) error
 	if err != nil {
 		return trace.Wrap(err)
 	}
+	logger := log.WithField("operation", operation.String())
 
 	operations, err := ops.GetActiveOperationsByType(g.siteKey, g.operator, operation.Type)
 	if err != nil && !trace.IsNotFound(err) {
@@ -279,12 +280,12 @@ func (g *operationGroup) onSiteOperationComplete(key ops.SiteOperationKey) error
 	}
 
 	if len(operations) > 0 {
-		log.Debugf("%v more %q operation(-s) in progress for %v: %#v %#v",
+		logger.Debugf("%v more %q operation(-s) in progress for %v: %#v %#v",
 			len(operations), operation.Type, key.SiteDomain, key, operations)
 		return nil
 	}
 
-	site, err := g.operator.openSite(g.siteKey)
+	cluster, err := g.operator.openSite(g.siteKey)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -294,7 +295,7 @@ func (g *operationGroup) onSiteOperationComplete(key ops.SiteOperationKey) error
 		return trace.Wrap(err)
 	}
 
-	err = site.setSiteState(state)
+	err = cluster.setSiteState(state)
 	if err != nil {
 		return trace.Wrap(err)
 	}

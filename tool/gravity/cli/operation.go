@@ -201,9 +201,9 @@ func completeClusterOperationPlan(localEnv *localenv.LocalEnvironment, operation
 		return trace.Wrap(err)
 	}
 	if fsm.IsCompleted(plan) {
-		return ops.CompleteOperation(operation.Key(), clusterEnv.Operator)
+		return ops.CompleteOperation(context.TODO(), operation.Key(), clusterEnv.Operator)
 	}
-	return ops.FailOperation(operation.Key(), clusterEnv.Operator, "completed manually")
+	return ops.FailOperation(context.TODO(), operation.Key(), clusterEnv.Operator, "completed manually")
 }
 
 // getLastOperation returns the last operation found across the specified backends.
