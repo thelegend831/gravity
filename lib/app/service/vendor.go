@@ -336,15 +336,20 @@ func (v *vendorer) VendorDir(ctx context.Context, unpackedDir string, req Vendor
 	for _, image := range teleutils.Deduplicate(images) {
 		log.Debugf("Searching for %q in %v", image, req.SkipImages)
 		if utils.StringInSlice(req.SkipImages.Images(), image) {
-			req.ProgressReporter.PrintSubStep("Skip image %v", image)
+			req.ProgressReporter.PrintSubWarn("Skip image %v", image)
 		} else {
 			imagesToVendor = append(imagesToVendor, image)
 		}
 	}
 	for _, image := range teleutils.Deduplicate(chartImages) {
+		parsed, err := loc.ParseDockerImage(image)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		image = parsed.WithoutRegistry().String()
 		log.Debugf("Searching for %q in %v", image, req.SkipImages)
 		if utils.StringInSlice(req.SkipImages.Images(), image) {
-			req.ProgressReporter.PrintSubStep("Skip image %v", image)
+			req.ProgressReporter.PrintSubWarn("Skip image %v", image)
 		} else {
 			chartImagesToVendor = append(chartImagesToVendor, image)
 		}

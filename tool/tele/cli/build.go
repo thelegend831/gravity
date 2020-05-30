@@ -130,18 +130,22 @@ func diffApplicationImage(params BuildParameters) error {
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	var newImages []string
-	for _, image := range newImage.Images {
-		newImages = append(newImages, image.Repository+":"+image.Tag)
-	}
 
 	oldImage, err := builder.GetImages(context.TODO(), params.UpgradeFrom)
 	if err != nil {
 		return trace.Wrap(err)
 	}
-	var oldImages []string
+
+	newImages := make(map[string][]string)
+	oldImages := make(map[string][]string)
+	allImages := make(map[string][]string)
+
+	for _, image := range newImage.Images {
+		newImages[image.Repository] = append(newImages[image.Repository], image.Tag)
+		allImages[image.Repository]
+	}
 	for _, image := range oldImage.Images {
-		oldImages = append(oldImages, image.Repository+":"+image.Tag)
+		oldImages[image.Repository] = append(oldImages[image.Repository], image.Tag)
 	}
 
 	allImages := teleutils.Deduplicate(append(oldImages, newImages...))

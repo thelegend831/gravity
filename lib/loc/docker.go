@@ -43,6 +43,13 @@ func (d *DockerImage) String() string {
 	return out
 }
 
+func (d *DockerImage) WithoutRegistry() *DockerImage {
+	return &DockerImage{
+		Repository: d.Repository,
+		Tag:        d.Tag,
+	}
+}
+
 // ParseDockerImage parses docker image
 func ParseDockerImage(image string) (*DockerImage, error) {
 	if image == "" {
