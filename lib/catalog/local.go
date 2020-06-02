@@ -17,18 +17,21 @@ limitations under the License.
 package catalog
 
 import (
+	"context"
+
 	"github.com/gravitational/gravity/lib/localenv"
 
 	"github.com/gravitational/trace"
 )
 
 // NewLocal returns application catalog for the local cluster.
+// TODO: accept context.Context
 func NewLocal() (*catalog, error) {
 	opsClient, err := localenv.ClusterOperator()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	localCluster, err := opsClient.GetLocalSite()
+	localCluster, err := opsClient.GetLocalSite(context.TODO())
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

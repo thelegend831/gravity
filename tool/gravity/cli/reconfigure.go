@@ -41,7 +41,7 @@ Would you like to proceed? You can launch the command with --confirm flag to sup
 // address for single-node clusters.
 func reconfigureCluster(env *localenv.LocalEnvironment, config InstallConfig, confirmed bool) error {
 	// Validate that the operation is ok to launch.
-	localState, err := validateReconfiguration(env, config)
+	localState, err := validateReconfiguration(context.TODO(), env, config)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -145,9 +145,9 @@ func newReconfigurator(ctx context.Context, config *install.Config, state *local
 //
 // If all checks pass, returns information about the existing cluster state such
 // as the cluster object and the original install operation.
-func validateReconfiguration(env *localenv.LocalEnvironment, config InstallConfig) (*localenv.LocalState, error) {
+func validateReconfiguration(ctx context.Context, env *localenv.LocalEnvironment, config InstallConfig) (*localenv.LocalState, error) {
 	// The cluster should be installed but not running.
-	err := localenv.DetectCluster(env)
+	err := localenv.DetectCluster(ctx, env)
 	if err != nil && trace.IsNotFound(err) {
 		return nil, trace.BadParameter("Gravity doesn't appear to be installed on this node.")
 	}

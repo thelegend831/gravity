@@ -99,7 +99,7 @@ func FromCluster(ctx context.Context, operator ops.Operator, cluster ops.Site, o
 	}
 
 	// FIXME: have status extension accept the operator/environment
-	err = status.Cluster.Extension.Collect()
+	err = status.Cluster.Extension.Collect(ctx)
 	if err != nil {
 		return status, trace.Wrap(err)
 	}

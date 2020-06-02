@@ -17,6 +17,8 @@ limitations under the License.
 package clusterconfig
 
 import (
+	"context"
+
 	"github.com/gravitational/gravity/lib/app"
 	"github.com/gravitational/gravity/lib/ops"
 	"github.com/gravitational/gravity/lib/storage"
@@ -35,7 +37,7 @@ func NewOperationPlan(
 	clusterConfig clusterconfig.Interface,
 	servers []storage.Server,
 ) (plan *storage.OperationPlan, err error) {
-	cluster, err := operator.GetLocalSite()
+	cluster, err := operator.GetLocalSite(context.TODO())
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

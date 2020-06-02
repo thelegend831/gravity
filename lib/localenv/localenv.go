@@ -17,6 +17,7 @@ limitations under the License.
 package localenv
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -335,12 +336,13 @@ func (env *LocalEnvironment) SiteOperator(options ...httplib.ClientOption) (*ops
 }
 
 // LocalCluster queries a local Gravity cluster.
+// TODO: accept context.Context
 func (env *LocalEnvironment) LocalCluster() (*ops.Site, error) {
 	operator, err := env.SiteOperator()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	cluster, err := operator.GetLocalSite()
+	cluster, err := operator.GetLocalSite(context.TODO())
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -606,12 +608,13 @@ func ClusterOperator() (*opsclient.Client, error) {
 }
 
 // LocalCluster returns the local cluster.
+// TODO: accept context.Context
 func LocalCluster() (*ops.Site, error) {
 	clusterOperator, err := ClusterOperator()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	cluster, err := clusterOperator.GetLocalSite()
+	cluster, err := clusterOperator.GetLocalSite(context.TODO())
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

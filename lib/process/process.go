@@ -523,7 +523,7 @@ func (p *Process) startAutoscale(ctx context.Context) error {
 		return nil
 	}
 	p.Info("Starting AWS autoscaler.")
-	site, err := p.operator.GetLocalSite()
+	site, err := p.operator.GetLocalSite(ctx)
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -681,7 +681,7 @@ func (p *Process) runRegistrySynchronizer(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			cluster, err := p.operator.GetLocalSite()
+			cluster, err := p.operator.GetLocalSite(ctx)
 			if err != nil {
 				p.Errorf("Failed to query local cluster: %v.",
 					trace.DebugReport(err))
@@ -704,7 +704,7 @@ func (p *Process) runRegistrySynchronizer(ctx context.Context) {
 }
 
 func (p *Process) reconcileNodeLabels(client *kubernetes.Clientset) error {
-	cluster, err := p.operator.GetLocalSite()
+	cluster, err := p.operator.GetLocalSite(context.TODO())
 	if err != nil {
 		return trace.Wrap(err)
 	}
@@ -790,7 +790,7 @@ func (p *Process) runSiteStatusChecker(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			cluster, err := p.operator.GetLocalSite()
+			cluster, err := p.operator.GetLocalSite(ctx)
 			if err != nil {
 				p.WithError(err).Warn("Failed to get local cluster.")
 				continue
@@ -940,7 +940,7 @@ func (p *Process) resumeLastOperationLoop(ctx context.Context) {
 	for {
 		select {
 		case <-p.resumeOperationCh:
-			site, err := p.operator.GetLocalSite()
+			site, err := p.operator.GetLocalSite(ctx)
 			if err != nil {
 				p.Errorf("Failed to query installed site: %v.", trace.DebugReport(err))
 				return
@@ -1928,7 +1928,7 @@ func (p *Process) newTLSConfig(certPEM, keyPEM []byte) (*tls.Config, error) {
 //
 // It is a no-op if the secret already exists.
 func (p *Process) initClusterCertificate(ctx context.Context, client *kubernetes.Clientset) error {
-	site, err := p.operator.GetLocalSite()
+	site, err := p.operator.GetLocalSite(ctx)
 	if err != nil {
 		return trace.Wrap(err)
 	}

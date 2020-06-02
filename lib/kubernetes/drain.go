@@ -50,8 +50,8 @@ func (d *drain) drainPods(ctx context.Context) error {
 		if err != nil {
 			return trace.Wrap(err)
 		}
-		log.Warningf("error deleting pods: %v\npending pods: %v",
-			trace.DebugReport(err), formatPodList(pendingPods))
+		log.Warnf("Error deleting pods: %v\npending pods: %v",
+			err, formatPodList(pendingPods))
 	}
 	return trace.Wrap(err)
 }

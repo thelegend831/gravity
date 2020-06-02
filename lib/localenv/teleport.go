@@ -36,7 +36,7 @@ func (env *LocalEnvironment) TeleportClient(proxyHost string) (*client.TeleportC
 	if err != nil {
 		return nil, trace.Wrap(err, "failed to get cluster operator service")
 	}
-	cluster, err := operator.GetLocalSite()
+	cluster, err := operator.GetLocalSite(context.TODO())
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
@@ -49,7 +49,7 @@ func (env *LocalEnvironment) AuditLog(ctx context.Context) (teleevents.IAuditLog
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	cluster, err := operator.GetLocalSite()
+	cluster, err := operator.GetLocalSite(ctx)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

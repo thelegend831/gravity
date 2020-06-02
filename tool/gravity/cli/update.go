@@ -53,7 +53,7 @@ func newUpdater(ctx context.Context, localEnv, updateEnv *localenv.LocalEnvironm
 		return nil, trace.BadParameter("this operation can only be executed on one of the master nodes")
 	}
 	operator := clusterEnv.Operator
-	cluster, err := operator.GetLocalSite()
+	cluster, err := operator.GetLocalSite(ctx)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
