@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/gravitational/gravity/lib/app"
 	"github.com/gravitational/gravity/lib/app/service"
 	"github.com/gravitational/gravity/lib/loc"
 	"github.com/gravitational/gravity/lib/schema"
@@ -147,7 +148,9 @@ func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) 
 	}
 
 	b.NextStep("Packaging application image")
-	installer, err := b.GenerateInstaller(manifest, *application)
+	installer, err := b.GenerateInstaller(manifest, app.InstallerRequest{
+		Application: *application,
+	})
 	if err != nil {
 		return trace.Wrap(err)
 	}

@@ -14,6 +14,9 @@ import (
 	"github.com/gravitational/trace"
 )
 
+// TODO(r0mant): Instead of unpacking provided image (which is slow), see if
+// we can modify the build procedure to save a list of embedded images somewhere,
+// and fall back to unpacking image for older images.
 func GetImages(ctx context.Context, imagePath string) (*InspectResponse, error) {
 	env, err := localenv.NewImageEnvironment(imagePath)
 	if err != nil {

@@ -57,6 +57,22 @@ func (r *applications) getApplicationInstaller(
 	return []*archive.Item{}, nil
 }
 
+func (r *applications) getPatchInstaller(
+	req appservice.InstallerRequest,
+	app *appservice.Application,
+	apps *applications,
+) ([]*archive.Item, error) {
+	err := pullApplications([]loc.Locator{app.Package}, apps, r, r)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	binary, err := r.getGravityBinaryForApp(app)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return []*archive.Item{binary}, nil
+}
+
 func (r *applications) getClusterInstaller(
 	req appservice.InstallerRequest,
 	app *appservice.Application,
@@ -165,7 +181,11 @@ func (r *applications) GetAppInstaller(req appservice.InstallerRequest) (install
 	var items []*archive.Item
 	switch app.Manifest.Kind {
 	case schema.KindBundle, schema.KindCluster:
-		items, err = r.getClusterInstaller(req, app, localApps)
+		if req.Patch {
+			items, err = r.getPatchInstaller(req, app, localApps)
+		} else {
+			items, err = r.getClusterInstaller(req, app, localApps)
+		}
 	case schema.KindApplication:
 		items, err = r.getApplicationInstaller(req, app, localApps)
 	default:

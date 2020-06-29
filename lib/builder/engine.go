@@ -316,8 +316,8 @@ func (b *Engine) CreateApplication(data io.ReadCloser) (*app.Application, error)
 
 // GenerateInstaller generates an installer tarball for the specified
 // application and returns its data as a stream
-func (b *Engine) GenerateInstaller(manifest *schema.Manifest, application app.Application) (io.ReadCloser, error) {
-	return b.Generator.Generate(b, manifest, application)
+func (b *Engine) GenerateInstaller(manifest *schema.Manifest, req app.InstallerRequest) (io.ReadCloser, error) {
+	return b.Generator.Generate(b, manifest, req)
 }
 
 // WriteInstaller writes the provided installer tarball data to disk

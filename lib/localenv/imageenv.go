@@ -38,7 +38,8 @@ type ImageEnvironment struct {
 	cleanup func()
 }
 
-// NewImageEnvironment returns a new environment for a specified image.
+// NewImageEnvironment returns a new environment for a specified application
+// or cluster image.
 //
 // The path can be either an image tarball or an unpacked image tarball.
 func NewImageEnvironment(path string) (*ImageEnvironment, error) {
