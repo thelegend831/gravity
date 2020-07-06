@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/gravitational/gravity/lib/app/service"
 	"github.com/gravitational/gravity/lib/builder"
@@ -29,7 +30,6 @@ import (
 	"github.com/gravitational/gravity/tool/common"
 
 	"github.com/buger/goterm"
-	"github.com/fatih/color"
 	teleutils "github.com/gravitational/teleport/lib/utils"
 	"github.com/gravitational/trace"
 )
@@ -84,6 +84,9 @@ func (p BuildParameters) BuilderConfig() builder.Config {
 }
 
 func buildClusterImage(ctx context.Context, params BuildParameters) error {
+	if params.Diff {
+		return diffClusterImage(params)
+	}
 	clusterBuilder, err := builder.NewClusterBuilder(params.BuilderConfig())
 	if err != nil {
 		return trace.Wrap(err)
@@ -95,6 +98,7 @@ func buildClusterImage(ctx context.Context, params BuildParameters) error {
 		Overwrite:  params.Overwrite,
 		BaseImage:  params.BaseImage,
 		Vendor:     params.Vendor,
+		From:       params.UpgradeFrom,
 	})
 }
 
@@ -114,6 +118,30 @@ func buildApplicationImage(ctx context.Context, params BuildParameters) error {
 		Vendor:     params.Vendor,
 		From:       params.UpgradeFrom,
 	})
+}
+
+func diffClusterImage(params BuildParameters) error {
+	clusterBuilder, err := builder.NewClusterBuilder(params.BuilderConfig())
+	if err != nil {
+		return trace.Wrap(err)
+	}
+	defer clusterBuilder.Close()
+
+	newImage, err := clusterBuilder.Inspect(builder.ClusterRequest{
+		SourcePath: params.SourcePath,
+		Vendor:     params.Vendor,
+	})
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	oldImage, err := builder.GetImages(context.TODO(), params.UpgradeFrom)
+	if err != nil {
+		return trace.Wrap(err)
+	}
+
+	diffImages(oldImage, newImage)
+	return nil
 }
 
 func diffApplicationImage(params BuildParameters) error {
@@ -136,38 +164,44 @@ func diffApplicationImage(params BuildParameters) error {
 		return trace.Wrap(err)
 	}
 
+	diffImages(oldImage, newImage)
+	return nil
+}
+
+func diffImages(oldImage, newImage *builder.InspectResponse) {
 	newImages := make(map[string][]string)
 	oldImages := make(map[string][]string)
-	allImages := make(map[string][]string)
+	allImages := []string{}
 
 	for _, image := range newImage.Images {
 		newImages[image.Repository] = append(newImages[image.Repository], image.Tag)
-		allImages[image.Repository]
+		allImages = append(allImages, image.Repository)
 	}
 	for _, image := range oldImage.Images {
 		oldImages[image.Repository] = append(oldImages[image.Repository], image.Tag)
+		allImages = append(allImages, image.Repository)
 	}
 
-	allImages := teleutils.Deduplicate(append(oldImages, newImages...))
+	allImages = teleutils.Deduplicate(allImages)
 	sort.Strings(allImages)
 
 	t := goterm.NewTable(0, 10, 5, ' ', 0)
-	common.PrintTableHeader(t, []string{oldImage.Manifest.Locator().String(), newImage.Manifest.Locator().String()})
+	common.PrintTableHeader(t, []string{
+		"",
+		fmt.Sprintf("%v:%v", oldImage.Manifest.Locator().Name, oldImage.Manifest.Locator().Version),
+		fmt.Sprintf("%v:%v", newImage.Manifest.Locator().Name, newImage.Manifest.Locator().Version),
+	})
 	for _, image := range allImages {
-		isOld := utils.StringInSlice(oldImages, image)
-		isNew := utils.StringInSlice(newImages, image)
+		oldTags, isOld := oldImages[image]
+		newTags, isNew := newImages[image]
 		if isOld && isNew {
-			fmt.Fprintf(t, "%v\t%v\n", image, image)
+			fmt.Fprintf(t, "%v\t%v\t%v\n", image, strings.Join(oldTags, ", "), strings.Join(newTags, ", "))
 		} else if isOld {
-			fmt.Fprintf(t, "%v\t%v\n", color.RedString(image), "")
+			fmt.Fprintf(t, "%v\t%v\t%v\n", image, strings.Join(oldTags, ", "), "")
 		} else {
-			fmt.Fprintf(t, "%v\t%v\n", "", color.GreenString(image))
+			fmt.Fprintf(t, "%v\t%v\t%v\n", image, "", strings.Join(newTags, ", "))
 		}
 	}
-	_, err = io.WriteString(os.Stdout, t.String())
-	if err != nil {
-		return trace.Wrap(err)
-	}
 
-	return nil
+	io.WriteString(os.Stdout, t.String())
 }

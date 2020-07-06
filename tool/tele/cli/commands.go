@@ -131,6 +131,8 @@ type BuildCmd struct {
 	BaseImage *string
 	// UpgradeFrom is a path to the image to build a patch off of.
 	UpgradeFrom *string
+	//
+	Diff *bool
 }
 
 type ListCmd struct {

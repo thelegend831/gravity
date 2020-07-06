@@ -115,7 +115,7 @@ func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) 
 		locator.Version)
 
 	if req.From != "" {
-		b.NextStep("Discovering Docker images in the existing application image")
+		b.NextStep("Discovering Docker images in %v", req.From)
 		response, err := GetImages(ctx, req.From)
 		if err != nil {
 			return trace.Wrap(err)
@@ -149,7 +149,7 @@ func (b *applicationBuilder) Build(ctx context.Context, req ApplicationRequest) 
 
 	b.NextStep("Packaging application image")
 	installer, err := b.GenerateInstaller(manifest, app.InstallerRequest{
-		Application: *application,
+		Application: application.Package,
 	})
 	if err != nil {
 		return trace.Wrap(err)

@@ -61,6 +61,35 @@ type ClusterRequest struct {
 	From string
 }
 
+func (b *clusterBuilder) Inspect(req ClusterRequest) (*InspectResponse, error) {
+	imageSource, err := GetClusterImageSource(req.SourcePath)
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	manifest, err := imageSource.Manifest()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	vendorDir, err := ioutil.TempDir("", "vendor")
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	defer os.RemoveAll(vendorDir)
+	images, err := b.GetImages(VendorRequest{
+		SourceDir: imageSource.Dir(),
+		VendorDir: vendorDir,
+		Manifest:  manifest,
+		Vendor:    req.Vendor,
+	})
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+	return &InspectResponse{
+		Manifest: manifest,
+		Images:   images,
+	}, nil
+}
+
 // Build builds a cluster image according to the provided parameters.
 func (b *clusterBuilder) Build(ctx context.Context, req ClusterRequest) error {
 	imageSource, err := GetClusterImageSource(req.SourcePath)
@@ -108,7 +137,7 @@ func (b *clusterBuilder) Build(ctx context.Context, req ClusterRequest) error {
 	}
 
 	if req.From != "" {
-		b.NextStep("Discovering Docker images in the existing application image")
+		b.NextStep("Discovering Docker images in %v", req.From)
 		response, err := GetImages(ctx, req.From)
 		if err != nil {
 			return trace.Wrap(err)
@@ -142,7 +171,7 @@ func (b *clusterBuilder) Build(ctx context.Context, req ClusterRequest) error {
 
 	b.NextStep("Packaging cluster image")
 	installer, err := b.GenerateInstaller(manifest, app.InstallerRequest{
-		Application: *application,
+		Application: application.Package,
 		Patch:       req.From != "",
 	})
 	if err != nil {

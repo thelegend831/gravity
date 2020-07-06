@@ -61,7 +61,8 @@ func Run(tele Application) error {
 			Verbose:          *tele.BuildCmd.Verbose,
 			BaseImage:        *tele.BuildCmd.BaseImage,
 			Insecure:         *tele.Insecure,
-			UpgradeFrom:      *tele.HelmBuildCmd.UpgradeFrom,
+			UpgradeFrom:      *tele.BuildCmd.UpgradeFrom,
+			Diff:             *tele.BuildCmd.Diff,
 			Vendor: service.VendorRequest{
 				PackageName:            *tele.BuildCmd.Name,
 				PackageVersion:         *tele.BuildCmd.Version,

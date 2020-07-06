@@ -62,7 +62,15 @@ func (r *applications) getPatchInstaller(
 	app *appservice.Application,
 	apps *applications,
 ) ([]*archive.Item, error) {
-	err := pullApplications([]loc.Locator{app.Package}, apps, r, r)
+	// In addition to the application itself pull base application as well,
+	// it's needed to fully resolve the manifest.
+	toPull := []loc.Locator{app.Package}
+	baseLocator := app.Manifest.Base()
+	if baseLocator != nil {
+		// Base app should be pulled first.
+		toPull = append([]loc.Locator{*baseLocator}, toPull...)
+	}
+	err := pullApplications(toPull, apps, r, r)
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

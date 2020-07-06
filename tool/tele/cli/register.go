@@ -59,6 +59,7 @@ func RegisterCommands(app *kingpin.Application) Application {
 	tele.BuildCmd.Pull = tele.BuildCmd.Flag("pull", "Always attempt to pull newer versions of Docker images.").Bool()
 	tele.BuildCmd.BaseImage = tele.BuildCmd.Flag("with-base-image", "Specify base image to use, for example 'gravity:7.0.0'.").String()
 	tele.BuildCmd.UpgradeFrom = tele.BuildCmd.Flag("upgrade-from", "").String()
+	tele.BuildCmd.Diff = tele.BuildCmd.Flag("diff", "").Bool()
 
 	tele.HelmCmd.CmdClause = app.Command("helm", "Operations with Helm charts.").Alias("app")
 
